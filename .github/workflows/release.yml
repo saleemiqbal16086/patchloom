@@ -24,6 +24,7 @@ jobs:
           diff -qr patchloom "$RUNNER_TEMP/packed/patchloom"
           find patchloom -name '*.php' -exec php -l {} \; | tee "$RUNNER_TEMP/lint"
           ! grep -q 'Errors parsing' "$RUNNER_TEMP/lint"
+          php tests/clarification.php
           gh release create "v$version" patchloom.zip --target "$GITHUB_SHA" --title "PatchLoom v$version" --notes "Installable WordPress plugin. Attachments include patchloom.zip."
           gh release download "v$version" -p patchloom.zip -D "$RUNNER_TEMP/verify"
           cmp patchloom.zip "$RUNNER_TEMP/verify/patchloom.zip"

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PatchLoom
  * Description: Migrate existing PHP templates to ACF and WooCommerce and preview, apply or undo supported AI revisions.
- * Version: 0.7.1
+ * Version: 0.7.2
  * Update URI: https://github.com/#patchloom-release-channel
  * Requires at least: 5.8
  * Author: Saleem Iqbal
@@ -140,7 +140,10 @@ function arv_screen() {
                 if (strlen($message)>8000) throw new Exception('Shorten the message to 8,000 bytes.');
                 $pending=get_transient(patchloom_file_slot());
                 $reply=null;
-                if (patchloom_product_section($message)) {
+                if ($pending && $pending['stage']==='clarify') {
+                    $question=patchloom_file_action('file_answer',null,$message);
+                    $reply=$question ?: 'Updated preview ready. Review the replacement below before allowing a write.';
+                } elseif (patchloom_product_section($message)) {
                     $reply=patchloom_begin_file_task($message);
                     delete_transient(pl_work_key());
                 }
@@ -162,7 +165,13 @@ function arv_screen() {
                     } elseif ($pending['stage']==='write') {
                         $reply='File change ka preview neeche ready hai. Review karke Allow this write ya Cancel dabao.';
                     } else {
-                        $reply='File request pending hai. Neeche file select karo aur read permission ka button dabao, ya Cancel se task band karo.';
+                        if (!empty($pending['editing']) && empty($pending['menu']) && empty($pending['links']) && hash_equals($pending['token'],sanitize_text_field($_POST['file_token']??''))) {
+                            $pending['answers'][]=['question'=>'Additional instruction before preview','answer'=>$message];
+                            set_transient(patchloom_file_slot(),$pending,15*MINUTE_IN_SECONDS);
+                            $reply='Instruction saved for this preview. Allow read to review the proposed change. Writing requires a separate approval.';
+                        } else {
+                            $reply='File request pending hai. Neeche file select karo aur read permission ka button dabao, ya Cancel se task band karo.';
+                        }
                     }
                 }
                 if ($reply===null) $reply=patchloom_inspect($message);
