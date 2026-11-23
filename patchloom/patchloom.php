@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PatchLoom
  * Description: Migrate existing PHP templates to ACF and WooCommerce and preview, apply or undo supported AI revisions.
- * Version: 0.7.0
+ * Version: 0.7.1
  * Update URI: https://github.com/#patchloom-release-channel
  * Requires at least: 5.8
  * Author: Saleem Iqbal
@@ -140,7 +140,11 @@ function arv_screen() {
                 if (strlen($message)>8000) throw new Exception('Shorten the message to 8,000 bytes.');
                 $pending=get_transient(patchloom_file_slot());
                 $reply=null;
-                $reply=preg_match('/replac|badal|update|import|csv/i',$message)?null:patchloom_inspect($message);
+                if (patchloom_product_section($message)) {
+                    $reply=patchloom_begin_file_task($message);
+                    delete_transient(pl_work_key());
+                }
+                if ($reply===null) $reply=preg_match('/replac|badal|update|import|csv/i',$message)?null:patchloom_inspect($message);
                 if ($reply===null && !$pending) $reply=pl_prompt_work($message);
                 if ($reply===null) $reply=patchloom_begin_file_task($message);
                 if ($reply!==null) {
