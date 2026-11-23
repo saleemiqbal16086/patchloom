@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PatchLoom
  * Description: Migrate existing PHP templates to ACF and WooCommerce and preview, apply or undo supported AI revisions.
- * Version: 0.6.1
+ * Version: 0.7.0
  * Update URI: https://github.com/#patchloom-release-channel
  * Requires at least: 5.8
  * Author: Saleem Iqbal
@@ -90,13 +90,32 @@ function arv_plan($request) {
     return ['id'=>$id,'before'=>$p->post_content,'after'=>implode('',$parts),'diff'=>$diff,'token'=>wp_generate_uuid4()];
 }
 
+add_action('admin_enqueue_scripts',function($hook){
+    if ($hook!=='toplevel_page_patchloom') return;
+    wp_enqueue_style('patchloom-chat',plugins_url('chat.css',__FILE__),[],'0.7.0');
+    wp_enqueue_script('patchloom-chat',plugins_url('chat.js',__FILE__),[],'0.7.0',true);
+});
+add_action('wp_ajax_patchloom_chat_ui',function(){
+    if (!current_user_can('manage_options')) wp_send_json_error([],403);
+    check_ajax_referer('arv_admin','_wpnonce');
+    ob_start(); arv_screen(); $html=ob_get_clean();
+    wp_send_json_success(['html'=>$html]);
+});
+function pl_prompt_work($message) {
+    if (!get_option('arv_key')) return pl_work_start($message);
+    $route=arv_ask('Classify the requested WordPress action. Return {"intent":"csv|import|acf|woo_templates|combined|other"}. csv means extract/export static products including a CSV requested before any import. import means explicitly create products now or after approval. acf means migrate an existing template to ACF or generate a field group. woo_templates means convert product templates. combined means both WooCommerce template conversion and ACF migration. Use other for questions, ordinary chat, existing field edits, theme file edits, menu operations and scans. Do not infer a store or start a workflow merely because a product or ACF is mentioned.',['message'=>$message],true,128);
+    $intent=$route['intent']??'other';
+    return pl_work_start($message,is_string($intent)?$intent:'other');
+}
+
 function arv_screen() {
     if (!current_user_can('manage_options')) return;
     $thread_key='patchloom_chat_'.get_current_user_id();
     $thread=get_transient($thread_key) ?: [];
     $slot = 'arv_plan_' . get_current_user_id();
     $undo = 'arv_undo_' . get_current_user_id();
-    echo '<div class="wrap"><h1>PatchLoom Assistant</h1>';
+    echo '<div id="pl-app" class="wrap"><header><span class="pl-icon" aria-hidden="true">P</span><h1>PatchLoom</h1></header><div class="pl-body">';
+    ob_start();
     try {
         if (isset($_POST['arv_action'])) {
             check_admin_referer('arv_admin');
@@ -110,6 +129,8 @@ function arv_screen() {
             }
             if ($act === 'clear') {
                 delete_transient($thread_key);
+                delete_transient(pl_work_key());
+                delete_transient($slot);
                 delete_transient(patchloom_file_slot());
                 $thread=[];
             }
@@ -119,7 +140,8 @@ function arv_screen() {
                 if (strlen($message)>8000) throw new Exception('Shorten the message to 8,000 bytes.');
                 $pending=get_transient(patchloom_file_slot());
                 $reply=null;
-                $reply=pl_work_start($message);
+                $reply=preg_match('/replac|badal|update|import|csv/i',$message)?null:patchloom_inspect($message);
+                if ($reply===null && !$pending) $reply=pl_prompt_work($message);
                 if ($reply===null) $reply=patchloom_begin_file_task($message);
                 if ($reply!==null) {
                     delete_transient($slot);
@@ -169,20 +191,17 @@ function arv_screen() {
             }
         }
     } catch (Throwable $e) { echo '<p role="alert">'.esc_html($e->getMessage()).'</p>'; }
-    echo '<section style="max-width:800px;background:white;padding:20px"><h2>Assistant chat</h2>';
-    if (!get_option('arv_key')) echo '<p>Local link and theme scans work now. Add an Arena key for AI responses.</p>';
-    foreach ($thread as $turn) echo '<p><strong>You</strong><br>'.nl2br(esc_html($turn['user'])).'</p><p><strong>PatchLoom</strong><br>'.nl2br(esc_html($turn['assistant'])).'</p>';
+    $notice=ob_get_clean();
+    echo '<div class="pl-feed" aria-live="polite">';
+    if (!$thread && !$notice) echo '<div class="pl-empty">What would you like to change?</div>';
+    foreach ($thread as $turn) {
+        echo '<article class="pl-message pl-user"><b>You</b>'.esc_html($turn['user']).'</article>';
+        echo '<article class="pl-message"><b>PatchLoom</b>'.esc_html($turn['assistant']).'</article>';
+    }
+    echo $notice;
     pl_work_controls();
     patchloom_file_controls();
-    echo '<form method="post">';
-    wp_nonce_field('arv_admin');
-    $chat_task=get_transient(patchloom_file_slot());
-    if ($chat_task) echo '<input type="hidden" name="file_token" value="'.esc_attr($chat_task['token']).'">';
-    echo '<label for="patchloom-message">Your message or revision</label><textarea id="patchloom-message" name="request" class="large-text" rows="4" required placeholder="Ask a question or paste a client revision"></textarea><p>Chat sends this message and recent conversation to Arena. Preview revision also sends content titles and relevant editable fields.</p><button class="button button-primary" name="arv_action" value="chat">Send message</button> <button class="button" name="arv_action" value="preview">Preview revision</button>';
-    if ($thread) echo ' <button formnovalidate class="button" name="arv_action" value="clear">Clear chat</button>';
-    echo '</form>';
-    echo '</section>';
-    foreach (['apply','undo','key','test'] as $act) {
+    foreach (['apply','undo'] as $act) {
         $plan = get_transient($act==='undo'?$undo:$slot);
         if (in_array($act,['apply','undo'],true) && !$plan) continue;
         echo '<form method="post">';
@@ -195,5 +214,15 @@ function arv_screen() {
         $labels=['key'=>'Save key','test'=>'Test Arena connection','preview'=>'Preview revision','apply'=>'Apply changes','undo'=>'Undo last change'];
         echo '<button class="button" name="arv_action" value="'.esc_attr($act).'">'.esc_html($labels[$act]).'</button></form>';
     }
-    echo '</div>';
+    echo '</div><form class="pl-compose" method="post">';
+    wp_nonce_field('arv_admin');
+    $chat_task=get_transient(patchloom_file_slot());
+    if ($chat_task) echo '<input type="hidden" name="file_token" value="'.esc_attr($chat_task['token']).'">';
+    echo '<label class="screen-reader-text" for="patchloom-message">Message PatchLoom</label><textarea id="patchloom-message" name="request" rows="2" required placeholder="Ask about your site or describe a change…"></textarea><button class="button button-primary" name="arv_action" value="chat">Send message</button>';
+    if ($thread) echo ' <button formnovalidate class="button" name="arv_action" value="clear">Clear chat</button>';
+    echo '</form>';
+
+    echo '<details class="pl-settings"><summary>Arena connection &amp; privacy</summary><p>AI chat sends your message and recent chat context to Arena. Approved site tasks may send the selected content or source files.</p><form method="post">';
+    wp_nonce_field('arv_admin');
+    echo '<label>API key <input type="password" name="key" autocomplete="new-password"></label> <button class="button" name="arv_action" value="key">Save key</button> <button class="button" name="arv_action" value="test">Test connection</button></form></details></div></div>';
 }

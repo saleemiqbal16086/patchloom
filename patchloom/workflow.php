@@ -6,20 +6,26 @@ function pl_store_work($job) {
     $job['token']=wp_generate_uuid4();
     set_transient(pl_work_key(),$job,HOUR_IN_SECONDS);
 }
-function pl_work_start($request) {
+function pl_work_start($request,$intent=null) {
     $woo=preg_match('/woocommerce|products?|books?/i',$request) && preg_match('/csv|import|archive|single\.php/i',$request);
     $acf=stripos($request,'acf')!==false && preg_match('/template|home\.php|homepage|home page|json/i',$request);
+    if ($intent!==null) {
+        $woo=in_array($intent,['csv','import','woo_templates','combined'],true);
+        $acf=in_array($intent,['acf','combined'],true);
+    }
     if (!$woo && !$acf) return null;
     if (!current_user_can('edit_themes')) throw new Exception('Theme editor permission required.');
     $only=$woo && !$acf && !preg_match('/archive|single\.php|dynamic|dynamize|override/i',$request);
-    pl_store_work(['only'=>$only,'stage'=>'select','theme'=>get_stylesheet(),'woo'=>(bool)$woo,'acf'=>(bool)$acf,'request'=>$request]);
+    if ($intent!==null) $only=in_array($intent,['csv','import'],true);
+    $export=$intent==='csv' || ($intent===null && $only && stripos($request,'csv')!==false && !preg_match('/(?:woo(?:commerce)?\s+(?:men|mein|me)|import)\s+(?:add|karo|kro|kr do)|and import|and add/i',$request));
+    pl_store_work(['export'=>$export,'only'=>$only,'stage'=>'select','theme'=>get_stylesheet(),'woo'=>(bool)$woo,'acf'=>(bool)$acf,'request'=>$request]);
     if ($only) return 'Review the product source files and approve reading them to prepare the CSV.';
     return 'Select the existing templates below and approve reading them. Home fields belong to the selected WordPress page.';
 }
 function pl_require_work($j) {
     if (!$j || $j['theme']!==get_stylesheet() || !current_user_can('manage_options') || !current_user_can('edit_themes') || !wp_is_file_mod_allowed('patchloom_work')) throw new Exception('Theme changed, job expired, or file editing disabled.');
     if ($j['acf'] && !function_exists('acf_import_field_group')) throw new Exception('Activate Advanced Custom Fields.');
-    if ($j['woo'] && (!class_exists('WC_Product_Simple') || !current_user_can('publish_products'))) throw new Exception('Activate WooCommerce and grant product publishing permission.');
+    if ($j['woo'] && empty($j['export']) && (!class_exists('WC_Product_Simple') || !current_user_can('publish_products'))) throw new Exception('Activate WooCommerce and grant product publishing permission.');
     if (isset($j['page']) && (!current_user_can('edit_post',$j['page']) || get_post_type($j['page'])!=='page')) throw new Exception('Home page is unavailable.');
 }
 function pl_work_files($j) {
@@ -41,19 +47,30 @@ function pl_product_match($row) {
     if ($id && $row['sku']!=='' && wc_get_product($id)->get_sku()!==$row['sku']) throw new Exception('SKU conflict: '.$row['name']);
     return (int)$id;
 }
-function pl_inventory($j,$files) {
-    $answer=arv_ask('Extract all distinct actual products from these existing templates. Merge identical products across sources. Return {"products":[{"name":"literal title","sku":"","price":"","description":"","image":""}],"issues":[]}. Empty strings for missing facts. Price must be a decimal from the source. Image must be an existing absolute attachment URL or theme-relative asset filename. Report conflicting values, variants and unresolved product includes under issues. Never invent data.', ['files'=>$files]);
-    if (!empty($answer['issues'])) throw new Exception('Resolve source inventory: '.wp_json_encode($answer['issues']));
-    if (empty($answer['products']) || !is_array($answer['products'])) throw new Exception('No static products found.');
+function pl_inventory(&$j,$files) {
+    $answer=arv_ask('Extract all distinct actual products from these existing templates. Merge identical products across sources. Return {"products":[{"name":"literal title","sku":"","price":"","description":"","image":""}],"issues":[]}. Empty strings for missing facts. Price must be a decimal from the source. Image must be an existing absolute attachment URL or theme-relative asset filename. Report conflicting values, variants and unresolved product includes under issues. Never invent data. Keep verified distinct products even with review notes. Do not create products solely from image alt text. Leave uncertain prices blank.', ['request'=>$j['request'],'files'=>$files]);
+    $j['issues']=[];
+    foreach ((array)($answer['issues']??[]) as $issue) $j['issues'][]=sanitize_text_field(is_string($issue)?$issue:wp_json_encode($issue));
+    if (empty($answer['products']) || !is_array($answer['products'])) throw new Exception('No identifiable product rows to export. '.implode(' ', $j['issues']));
     $rows=[];
     foreach ($answer['products'] as $item) {
         $r=[];
         foreach (['name','sku','price','description','image'] as $k) $r[$k]=sanitize_text_field($item[$k]??'');
-        if (!$r['name'] || ($r['price']!=='' && !preg_match('/^\d+(\.\d+)?$/D',$r['price']))) throw new Exception('Invalid product name or price.');
-        if (isset($rows[strtolower($r['name'])])) throw new Exception('Repeated title: '.$r['name']);
-        $r['existing']=pl_product_match($r);
+        if (!$r['name']) { $j['issues'][]='Skipped a source row without a product title.'; continue; }
+        if ($r['price']!=='' && !preg_match('/^\d+(\.\d+)?$/D',$r['price'])) {
+            $j['issues'][]='Unverified price left blank for '.$r['name']; $r['price']='';
+        }
+        $key=strtolower($r['name']);
+        if (isset($rows[$key])) {
+            foreach (['price','image','sku','description'] as $field) {
+                if ($rows[$key][$field]!==$r[$field]) { $rows[$key][$field]=''; $j['issues'][]='Conflicting '.$field.' left blank for '.$r['name']; }
+            }
+            continue;
+        }
+        $r['existing']=empty($j['export'])?pl_product_match($r):0;
         $rows[strtolower($r['name'])]=$r;
     }
+    if (!$rows) throw new Exception('No named products could be exported.');
     return array_values($rows);
 }
 function pl_product_image($image,$product_id) {
@@ -252,6 +269,8 @@ function pl_work_action($act) {
             $files=pl_work_files($j);
             foreach ($files as $role=>$s) if (hash('sha256',$s)!==$j['hashes'][$role]) throw new Exception('Source changed. Start a new preview.');
             if ($act==='work_import' && $j['stage']==='inventory') {
+                if (!empty($j['export'])) throw new Exception('This request is export only.');
+                if (!empty($j['issues']) && empty($_POST['review_issues'])) throw new Exception('Review the inventory notes before importing.');
                 pl_import_rows($j);
                 if (!empty($j['only'])) {
                     delete_transient($key);
@@ -288,7 +307,7 @@ function pl_work_controls() {
     if (!$j) return;
     $only=!empty($j['only']) || ($j['stage']==='select' && !isset($j['only']) && $j['woo'] && !$j['acf'] && !preg_match('/archive|single\.php|dynamic|dynamize|override/i',$j['request']));
     if ($only && !isset($j['only'])) { $j['only']=true; set_transient(pl_work_key(),$j,HOUR_IN_SECONDS); }
-    echo '<form method="post"><h3>'.($only?'Product CSV and import':'Existing template workflow').'</h3>';
+    echo '<form method="post"><h3>'.(!empty($j['export'])?'Product CSV':($only?'Product CSV and import':'Existing template workflow')).'</h3>';
     wp_nonce_field('arv_admin');
     echo '<input type="hidden" name="work_token" value="'.esc_attr($j['token']).'">';
     if ($j['stage']==='select') {
@@ -322,9 +341,17 @@ function pl_work_controls() {
         echo '<p>Selected file contents and your instructions will be sent to Arena. Choose the templates containing the actual markup.</p>';
         $action='work_read';$label='Allow read and prepare preview';
     } elseif ($j['stage']==='inventory') {
+        if (!empty($j['issues'])) {
+            echo '<details class="pl-notes"><summary>Inventory notes ('.count($j['issues']).')</summary><ul>';
+            foreach ($j['issues'] as $issue) echo '<li>'.esc_html($issue).'</li>';
+            echo '</ul></details>';
+        }
+        echo '<p>'.count($j['rows']).' distinct product rows ready for download.</p>';
         echo '<table class="widefat"><tr><th>Product</th><th>SKU</th><th>Price</th><th>Action</th></tr>';
-        foreach ($j['rows'] as $r) echo '<tr><td>'.esc_html($r['name']).'</td><td>'.esc_html($r['sku']).'</td><td>'.esc_html($r['price']).'</td><td>'.esc_html($r['existing']?'Reuse #'.$r['existing']:($r['price']===''?'Create draft':'Create published product')).'</td></tr>';
+        foreach ($j['rows'] as $r) echo '<tr><td>'.esc_html($r['name']).'</td><td>'.esc_html($r['sku']).'</td><td>'.esc_html($r['price']).'</td><td>'.esc_html(!empty($j['export'])?'CSV only':($r['existing']?'Reuse #'.$r['existing']:($r['price']===''?'Create draft':'Create published product'))).'</td></tr>';
         echo '</table><p><a href="'.esc_url(wp_nonce_url(admin_url('admin-post.php?action=patchloom_csv'),'pl_csv_'.$j['token'])).'">Download WooCommerce CSV</a></p>';
+        if (!empty($j['export'])) {echo '<button class="button" name="arv_action" value="work_cancel">Done</button></form>'; return;}
+        if (!empty($j['issues'])) echo '<p><label><input type="checkbox" name="review_issues" required> I reviewed the inventory notes.</label></p>';
         $action='work_import';$label='Approve product import';
     } elseif ($j['stage']==='imported') {
         echo '<p>Product inventory imported or matched. Template changes require a separate preview.</p>';

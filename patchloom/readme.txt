@@ -1,7 +1,7 @@
 === PatchLoom ===
 Tags: revisions, ai assistant, custom fields, theme development
 Requires PHP: 7.4
-Stable tag: 0.6.1
+Stable tag: 0.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -39,6 +39,9 @@ Privacy: https://platform.arena.ai/privacy
 Generated field groups are imported into ACF and saved in the active theme acf-json directory.
 
 == Changelog ==
+
+= 0.7.0 =
+* Responsive chat, asynchronous actions, task-specific progress, intent routing and downloadable CSV previews with source quality notes.
 
 = 0.5.1 =
 * Both chat buttons route template edits to theme file approval before page-text planning.
