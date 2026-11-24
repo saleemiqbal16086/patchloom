@@ -71,3 +71,11 @@ $fail=false;
 if (pl_services_apply($j)!==2 || $drafts[2]['post_status']!=='draft' || $drafts[2]['menu_order']!==1 || !is_file(pl_target('single-service.php'))) throw new Exception('Approved migration failed');
 unlink(pl_target('listing.php'));unlink(pl_target('single-service.php'));rmdir($root);
 echo "Approved migration and rollback passed\n";
+foreach ([['What We Offer'=>'What we offer'],[['key'=>'what-we-offer','label'=>'What we offer']],['section_what_we_offer'=>'What we offer']] as $labels) {
+    [$normalized,$bindings]=pl_services_section_mapping(['section_labels'=>$labels,'detail_bindings'=>[['field'=>'What We Offer'],['field'=>'content']]]);
+    if ($normalized!==['section_what_we_offer'=>'What we offer'] || $bindings[0]['field']!=='section_what_we_offer' || $bindings[1]['field']!=='content') throw new Exception('Section keys diverged');
+}
+try {
+    pl_services_section_mapping(['section_labels'=>['why-us'=>'One','why us'=>'Two'],'detail_bindings'=>[['field'=>'why-us']]]);
+    throw new LogicException('Ambiguous section keys accepted');
+} catch (LogicException $e){throw $e;} catch (Exception $e){}
