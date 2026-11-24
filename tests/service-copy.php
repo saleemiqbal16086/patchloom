@@ -12,7 +12,7 @@ function wp_generate_uuid4(){return 'test';}
 function esc_html($s){return htmlspecialchars($s,ENT_QUOTES);}
 function wp_json_encode($s){return json_encode($s);}
 function arv_ask($p,$data){
-    if ($data['headings']!==['Leak repair','Leak repair']) throw new Exception('Incorrect heading scope');
+    if ($data['headings']!==($GLOBALS['expected_headings'] ?? ['Leak repair','Leak repair'])) throw new Exception('Incorrect heading scope');
     return ['paragraphs'=>['Inspect flashing & seals.','Identify the source.']];
 }
 function arv_target_value(){return $GLOBALS['source'];}
@@ -41,3 +41,16 @@ if ($preview['before'] !== $source || json_decode($preview['after']) != json_dec
 $rows=[];
 pl_copy_inspect_fields(json_decode($source,true),'','',$rows);
 if (pl_copy_inspect_id('Google Ads service (post ID 873) ka saved Elementor data inspect karo')!==873 || pl_copy_inspect_id('Inspect Elementor post 873')!==873 || count($rows)!==3 || $rows[0]!==['0.elements.1.settings.text_ed','Leak repair','<p>Lorem ipsum dolor sit amet.</p><p>Real copy</p><p>Lorem ipsum.</p>']) throw new Exception('Local Elementor inspection failed');
+
+// Both custom fields from the service report should reach one preview.
+$expected_headings = ['Google Ads','Google Ads'];
+$short = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed placerat, lectus sed porttitor rutrum, tortor dolor sodales tellus, in laoreet orci nisl vitae erat. Vestibulum sit amet pellentesque dolor, at condimentum nunc.';
+$long = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed placerat, lectus sed porttitor rutrum, tortor dolor sodales tellus, in laoreet orci nisl vitae erat. Vestibulum sit amet pellentesque dolor, at condimentum nunc. Curabitur bibendum odio vel sagittis cursus. Nulla mi lorem, placerat sed laoreet eu, scelerisque eget libero. Praesent pretium lorem ipsum.';
+$nodes = [['widgetType'=>'heading','settings'=>['title'=>'Google Ads']]];
+foreach ([$long,$short,$short.' Contact our team today.'] as $text) {
+    $nodes[] = ['widgetType'=>'custom','settings'=>['text_ed'=>'<p>'.$text.'</p>']];
+}
+$source = json_encode([['elements'=>[['elements'=>$nodes]]]]);
+pl_copy_next('service','Preview service placeholders',0,'test');
+$saved = json_decode($preview['after'],true)[0]['elements'][0]['elements'];
+if ($preview['before']!==$source || count($preview['diff'])!==2 || $saved[1]['settings']['text_ed']!=='<p>Inspect flashing &amp; seals.</p>' || $saved[2]['settings']['text_ed']!=='<p>Identify the source.</p>' || $saved[3]!==$nodes[3]) throw new Exception('Reported service paragraph regression');
