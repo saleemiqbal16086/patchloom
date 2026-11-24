@@ -32,3 +32,9 @@ $items = [];
 $misses = [];
 pl_copy_collect([['widgetType'=>'accordion','settings'=>['tabs'=>[['tab_title'=>'Pricing','tab_content'=>'<p>&nbsp;Lorem&nbsp;ipsum dolor sit amet…</p>']]]],['widgetType'=>'custom','settings'=>['custom_body'=>'Lorem ipsum.']]],$items,'Service',[],$misses);
 if (count($items)!==1 || $items[0]['heading']!=='Pricing' || count($misses)!==1 || !pl_copy_placeholder('Lorem Ipsum is simply dummy text of the printing and typesetting industry.') || pl_copy_placeholder('Lorem ipsum. Keep real copy.')) throw new Exception('Placeholder recognition regression');
+
+// Repeat the full preview against the custom widget setting found on service posts.
+$source = str_replace('"editor":', '"text_ed":', $source);
+$expected = str_replace('"editor":', '"text_ed":', $expected);
+pl_copy_next('service','Replace service placeholders',0,'test');
+if ($preview['before'] !== $source || json_decode($preview['after']) != json_decode($expected)) throw new Exception('Custom text_ed preview regression');

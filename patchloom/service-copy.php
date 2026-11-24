@@ -31,7 +31,7 @@ function pl_copy_placeholder($text) {
 }
 
 function pl_copy_fields($settings, $base, $heading, &$items, &$misses) {
-    $body_keys = ['editor','description_text','description','text','content','tab_content','accordion_content','item_description','item_content','testimonial_content','box_description','item_text'];
+    $body_keys = ['editor','text_ed','description_text','description','text','content','tab_content','accordion_content','item_description','item_content','testimonial_content','box_description','item_text'];
     foreach ($settings as $key=>$value) {
         if ($key === '__dynamic__' || !empty($settings['__dynamic__'][$key])) continue;
         $path = array_merge($base, [$key]);
