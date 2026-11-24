@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PatchLoom
  * Description: Migrate existing PHP templates to ACF and WooCommerce and preview, apply or undo supported AI revisions.
- * Version: 0.7.3
+ * Version: 0.7.4
  * Update URI: https://github.com/#patchloom-release-channel
  * Requires at least: 5.8
  * Author: Saleem Iqbal
@@ -140,13 +140,19 @@ function arv_screen() {
                 $state = get_transient(pl_copy_key());
                 if (!$state || get_transient($slot)) throw new Exception('Start a new service copy request or review the current preview.');
                 $type = $state['type'] ?? sanitize_key(wp_unslash($_POST['copy_type'] ?? ''));
-                $next = pl_copy_next($type,$state['request'],$state['cursor'],$slot);
+                $report = $state['report'] ?? [];
+                $next = pl_copy_next($type,$state['request'],$state['cursor'],$slot,$report);
+                $state['report'] = empty($next['preview']) ? $report : [];
                 if ($next) {
                     set_transient(pl_copy_key(),array_merge($state,$next,['type'=>$type]),DAY_IN_SECONDS);
                     echo !empty($next['preview']) ? '<p>Review the proposed paragraphs below.</p>' : '<p>Scan continues in the next batch.</p>';
                 } else {
                     delete_transient(pl_copy_key());
-                    echo '<p>Scan complete. No more supported placeholder paragraphs found.</p>';
+                    echo '<p>'.esc_html(sprintf('Scan complete for %s. Published editable posts checked since the last preview: %d. Posts with local Elementor data: %d.', $type,$report['posts'],$report['documents'])).'</p>';
+                    if ($report['misses']) echo '<p>Possible placeholder fields that need review: '.esc_html(implode(' | ',$report['misses'])).'</p>';
+                    elseif (!$report['posts']) echo '<p>Check the selected post type and the publication status of your services.</p>';
+                    elseif (!$report['documents']) echo '<p>Open one service in Elementor and check whether the text comes from a shared Single template, post content or a custom field.</p>';
+                    else echo '<p>No editable placeholder matched. Check the widget name and exact text in one affected service.</p>';
                 }
             }
             if ($act === 'clear') {
@@ -220,7 +226,7 @@ function arv_screen() {
                 $id = $plan['id'];
                 $p = get_post($id);
                 $entry=$plan['entry']??['kind'=>'content'];
-                if (isset($plan['copy_type']) && (!$p || $p->post_type!==$plan['copy_type'] || $p->post_status!=='publish' || get_post_meta($id,'_elementor_edit_mode',true)!=='builder')) throw new Exception('Service post changed. Prepare a fresh preview.');
+                if (isset($plan['copy_type']) && (!$p || $p->post_type!==$plan['copy_type'] || $p->post_status!=='publish')) throw new Exception('Service post changed. Prepare a fresh preview.');
                 if (!$p || !in_array($p->post_status,['publish','draft'],true) || $p->post_password || !current_user_can('edit_post',$id) || arv_target_value($id,$entry)!==$plan[$rev?'after':'before']) throw new Exception('Target changed. Generate a fresh preview.');
                 $content=$plan[$rev?'before':'after'];
                 arv_target_save($id,$entry,$content,$plan[$rev?'after':'before']);

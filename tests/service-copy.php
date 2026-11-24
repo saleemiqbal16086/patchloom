@@ -19,6 +19,7 @@ function arv_target_value(){return $GLOBALS['source'];}
 function set_transient($key,$value,$ttl){$GLOBALS['preview']=$value;}
 $wpdb=new class {
     public $posts='posts';
+    public $last_error = "";
     function prepare(...$args){return '';}
     function get_col(){return [19];}
 };
@@ -27,3 +28,7 @@ $result=pl_copy_next('service','Elementor services lorem ipsum replace',0,'test'
 $expected=str_replace('<p>Lorem ipsum dolor sit amet.</p><p>Real copy</p><p>Lorem ipsum.</p>','<p>Inspect flashing &amp; seals.</p><p>Real copy</p><p>Identify the source.</p>',$source);
 if ($result['cursor']!==18 || $preview['before']!==$source || json_decode($preview['after'])!=json_decode($expected) || count($preview['diff'])!==2 || strpos($preview['after'],'"style":{}')===false) throw new Exception('Invalid preview');
 echo "Service copy preview passed\n";
+$items = [];
+$misses = [];
+pl_copy_collect([['widgetType'=>'accordion','settings'=>['tabs'=>[['tab_title'=>'Pricing','tab_content'=>'<p>&nbsp;Lorem&nbsp;ipsum dolor sit amet…</p>']]]],['widgetType'=>'custom','settings'=>['custom_body'=>'Lorem ipsum.']]],$items,'Service',[],$misses);
+if (count($items)!==1 || $items[0]['heading']!=='Pricing' || count($misses)!==1 || !pl_copy_placeholder('Lorem Ipsum is simply dummy text of the printing and typesetting industry.') || pl_copy_placeholder('Lorem ipsum. Keep real copy.')) throw new Exception('Placeholder recognition regression');
