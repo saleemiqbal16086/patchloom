@@ -79,3 +79,10 @@ try {
     pl_services_section_mapping(['section_labels'=>['why-us'=>'One','why us'=>'Two'],'detail_bindings'=>[['field'=>'why-us']]]);
     throw new LogicException('Ambiguous section keys accepted');
 } catch (LogicException $e){throw $e;} catch (Exception $e){}
+$source='<h2>Overview</h2><p>First paragraph</p><h2>Benefits</h2><p>Second paragraph</p>';
+$mapping=['detail_bindings'=>[['old'=>'First paragraph','field'=>'section_name'],['old'=>'Second paragraph','field'=>'section_name']]];
+[$labels,$fields]=pl_services_section_mapping($mapping,$source);
+if (array_values($labels)!==['Overview','Benefits'] || $fields[0]['field']===$fields[1]['field']) throw new Exception('Missing labels merged distinct sections');
+$expr=array_fill_keys(array_keys($labels),'dynamic copy');
+if (substr_count(pl_services_bind($source,$fields,$expr,array_keys($labels)),'dynamic copy')!==2) throw new Exception('Recovered bindings failed');
+try {pl_services_section_mapping($mapping,$source.$source); throw new LogicException('Ambiguous literal accepted');} catch (LogicException $e){throw $e;} catch (Exception $e){}

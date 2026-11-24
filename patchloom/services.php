@@ -150,7 +150,25 @@ function pl_services_section_key($name) {
     return 'section_'.$slug;
 }
 
-function pl_services_section_mapping($mapping) {
+// Recover a missing display label only for an unambiguous literal in this template.
+function pl_services_infer_section($binding,$detail,$key) {
+    $old=$binding['old']??null;
+    $wrap=$binding['wrap']??'';
+    $context=$wrap!==''?$wrap:$old;
+    if (!is_string($old) || $old==='' || !is_string($context) || $context==='' || substr_count($detail,$context)!==1 || substr_count($context,$old)!==1) {
+        throw new Exception('Detail section '.$key.' has no unique source context. Preview again with the template containing its text.');
+    }
+    if ($key!=='section_name') return [$key,str_replace('_',' ',substr($key,8))];
+    $offset=strpos($detail,$context)+strpos($context,$old);
+    $before=substr($detail,0,$offset);
+    preg_match_all('~<h[1-6]\b[^>]*>(.*?)</h[1-6]\s*>~is',$before,$headings);
+    $label=$headings[1]?pl_services_visible_text(end($headings[1])):'';
+    if ($label==='') $label='Detail section at line '.(1+substr_count($before,"\n"));
+    $key='section_detail_'.substr(hash('sha256',$context),0,16);
+    return [$key,$label];
+}
+
+function pl_services_section_mapping($mapping,$detail='') {
     $definitions=$mapping['section_labels']??[];
     $bindings=$mapping['detail_bindings']??null;
     if (!is_array($definitions) || !is_array($bindings)) throw new Exception('Invalid detail field mapping. Retry the detail preview.');
@@ -177,7 +195,12 @@ function pl_services_section_mapping($mapping) {
         $field=trim($field);
         if (in_array($field,$core,true)) { $binding['field']=$field; continue; }
         $key=pl_services_section_key($field);
-        if (!isset($labels[$key])) throw new Exception('No detail section label was returned for '.$field.'. Retry the detail preview.');
+        if (!isset($labels[$key]) || $key==='section_name') {
+            [$key,$label]=pl_services_infer_section($binding,$detail,$key);
+            if (isset($names[$key]) && $names[$key]!==$field) throw new Exception('Conflicting detail section: '.$field);
+            $names[$key]=$field;
+            $labels[$key]=$label;
+        }
         $binding['field']=$key;
         $used[$key]=$labels[$key];
     }
@@ -194,10 +217,10 @@ function pl_services_prepare(&$j) {
     $target_path=pl_target($target);
     $prior=is_file($target_path)?patchloom_file_source($j,$target):null;
     if ($listing!==$j['listing_source']) throw new Exception('Listing changed. Cancel and start a new preview.');
-    $mapping=arv_ask('Map only the single service detail template. Return JSON {detail_bindings:[{old:"exact source literal",field:"title|excerpt|content|image|section_name",wrap:"optional exact unique context"}],section_labels:{section_name:"Editable heading"}}. Use identical keys such as section_benefits in both the bindings and the section_labels object. Map title and main content and any additional detail text sections. Preserve the source HTML and layout. Use literals inside text nodes or attribute values. Do not write service copy or PHP. Return {issue:"reason"} if impossible.',['request'=>$j['request'],'detail'=>$detail],true,4096,120);
+    $mapping=arv_ask('Map only the single service detail template. Return JSON {detail_bindings:[{old:"exact source literal",field:"content",wrap:"optional exact unique context"}],section_labels:{}}. Use title, excerpt, content, or image for standard bindings. For each extra body field, choose a distinct key based on its actual heading and add its display label under that same key in section_labels. Map title and main content and any additional detail text sections. Preserve the source HTML and layout. Use literals inside text nodes or attribute values. Do not write service copy or PHP. Return {issue:"reason"} if impossible.',['request'=>$j['request'],'detail'=>$detail],true,4096,120);
     if (!empty($mapping['issue'])) throw new Exception(sanitize_text_field($mapping['issue']));
     $data=$j['inventory'];
-    [$labels,$data['detail_bindings']]=pl_services_section_mapping($mapping);
+    [$labels,$data['detail_bindings']]=pl_services_section_mapping($mapping,$detail);
     $cards=$data['cards']??[];
     if (!is_array($cards) || !$cards) throw new Exception('Arena could not identify service cards.');
     $expr=['title'=>'<?php echo esc_html(get_the_title()); ?>','excerpt'=>'<?php echo esc_html(get_the_excerpt()); ?>','link'=>'<?php echo esc_url(get_permalink()); ?>','image'=>'<?php echo esc_url(get_the_post_thumbnail_url(get_the_ID(),"full") ?: get_post_meta(get_the_ID(),"_pl_service_image",true)); ?>','content'=>'<?php echo nl2br(esc_html(get_post_field("post_content",get_the_ID()))); ?>'];
