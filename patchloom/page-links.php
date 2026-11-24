@@ -1,8 +1,27 @@
 <?php
 defined('ABSPATH') || exit;
 
-// Prefer exact labels and filenames. Only fall back to common equivalent page names.
-function patchloom_link_matches($index,$label,$stem) {
+// Rank shared words and minor spelling differences after exact and alias checks.
+function patchloom_link_score($source,$candidate) {
+    $ignored = ['our','the','a','and','of','to','page','pages','read','learn','more','click','here','view'];
+    $words = array_unique(array_diff(explode('-',$source),$ignored,['']));
+    $other = array_unique(array_diff(explode('-',$candidate),$ignored,['']));
+    if (!$words || !$other) return 0;
+    $overlap = count(array_intersect($words,$other));
+    $score = 2 * $overlap / (count($words)+count($other));
+    if (min(strlen($source),strlen($candidate))>=5 && max(strlen($source),strlen($candidate))<=120 && preg_match('/^[a-z0-9-]+$/D',$source) && preg_match('/^[a-z0-9-]+$/D',$candidate)) {
+        $distance = levenshtein($source,$candidate);
+        if ($distance<=2) $score=max($score,1-$distance/max(strlen($source),strlen($candidate)));
+    }
+    return $score;
+}
+
+function patchloom_link_options($pages) {
+    return implode(', ',array_map(function($p){return '/'.trim(get_page_uri($p),'/').'/';},array_slice($pages,0,4)));
+}
+
+function patchloom_link_matches($index,$label,$stem,&$suggestions = []) {
+    $suggestions=[];
     if (!empty($index[$label])) return $index[$label];
     if (!empty($index[$stem])) return $index[$stem];
     $groups = [
@@ -18,8 +37,23 @@ function patchloom_link_matches($index,$label,$stem) {
             if ($stem!==$group[0] && $alias!==$group[0]) continue;
             $matches += $index[$alias] ?? [];
         }
-        return $matches;
+        if ($matches) return $matches;
     }
+    $scores = $pages = [];
+    foreach ($index as $key=>$entries) {
+        // Avoid an alias fallback from one specific personal/company page to another.
+        if (in_array($stem,['about-me','about-us','contact-me','contact-us'],true) && in_array($key,['about-me','about-us','contact-me','contact-us'],true)) continue;
+        $score = max(patchloom_link_score($stem,(string)$key),patchloom_link_score($label,(string)$key));
+        if ($score < 0.45) continue;
+        foreach ($entries as $id=>$page) {
+            $scores[$id] = max($scores[$id] ?? 0,$score);
+            $pages[$id] = $page;
+        }
+    }
+    arsort($scores);
+    foreach (array_keys($scores) as $id) $suggestions[$id]=$pages[$id];
+    $ranked=array_values($scores);
+    if ($ranked && $ranked[0]>=0.80 && $ranked[0]-($ranked[1] ?? 0)>=0.15) return [reset($suggestions)];
     return [];
 }
 
@@ -69,8 +103,9 @@ function patchloom_page_links($source,&$report) {
                 $dest='/';
             } else {
                 $matches=strpos($label,$prefix)===false?($index[$key]??[]):[];
-                if (!$matches) $matches=$legacy?[$legacy]:patchloom_link_matches($index,$key,$stem);
-                if (count($matches)!==1) { $report[]=$label.' — no unique published page match';return $m[0]; }
+                $suggestions=[];
+                if (!$matches) $matches=$legacy?[$legacy]:patchloom_link_matches($index,strpos($label,$prefix)===false?$key:'',$stem,$suggestions);
+                if (count($matches)!==1) { $options=patchloom_link_options($matches ?: $suggestions); $report[]=$raw.' ('.$label.') — '.($options?'review candidates: '.$options:'no matching published page');return $m[0]; }
                 $page=reset($matches);
                 $dest='/'.trim(get_page_uri($page),'/').'/';
                 if ($dest==='//') return $m[0];

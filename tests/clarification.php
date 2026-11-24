@@ -42,3 +42,10 @@ if (strpos(patchloom_page_links($link,$report),"home_url( '/about-us/' ) . '#tea
 $link_pages[]=(object)['post_password'=>'','post_title'=>'About Me','post_name'=>'about-me','ID'=>8];
 if (patchloom_page_links($link,$report)!==$link) throw new Exception('Ambiguous alias was rewritten');
 if (strpos(patchloom_page_links('<a href="about.html">About Me</a>',$report),'/about-me/')===false) throw new Exception('Exact anchor match lost precedence');
+$link_pages=[(object)['post_password'=>'','post_title'=>'Our Team','post_name'=>'our-team','ID'=>10]];
+foreach (['team','our-teem'] as $name) {
+    if (strpos(patchloom_page_links('<a href="'.$name.'.html">Read more</a>',$report),'/our-team/')===false) throw new Exception('Similar link missing: '.$name);
+}
+$link_pages[]=(object)['post_password'=>'','post_title'=>'Team Members','post_name'=>'team-members','ID'=>11];
+$weak='<a href="members.html">View</a>';
+if (patchloom_page_links($weak,$report)!==$weak || strpos(end($report),'/team-members/')===false) throw new Exception('Weak link should show a candidate for review');

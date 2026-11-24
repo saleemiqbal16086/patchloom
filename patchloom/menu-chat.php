@@ -42,8 +42,9 @@ function patchloom_menu_preview($source,&$task) {
             elseif (preg_match('~^<\?php\s+echo\s+esc_url\(\s*home_url\(\s*["\x27](/[\w/-]+)["\x27]\s*\)\s*\)\s*;\s*\?>$~',$href,$m)) {
                 $page=get_page_by_path(trim($m[1],'/')); $id=$page?$page->ID:0;
             } elseif (preg_match('~^(?:\./|/)?([\w-]+)\.html$~i',$href,$m)) {
-                $matches=patchloom_link_matches($index,sanitize_title($label),sanitize_title($m[1]));
+                $matches=patchloom_link_matches($index,sanitize_title($label),sanitize_title($m[1]),$suggestions);
                 if (count($matches)===1) $id=reset($matches)->ID;
+                elseif ($matches || $suggestions) throw new Exception('Review destinations for '.$label.': '.patchloom_link_options($matches ?: $suggestions));
             }
             $page=$id?get_post($id):null;
             if (!$page || $page->post_type!=='page' || $page->post_status!=='publish' || $page->post_password) throw new Exception('Could not verify destination for '.$label.'. Menu unchanged.');
