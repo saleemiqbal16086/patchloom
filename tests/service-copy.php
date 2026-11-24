@@ -38,3 +38,6 @@ $source = str_replace('"editor":', '"text_ed":', $source);
 $expected = str_replace('"editor":', '"text_ed":', $expected);
 pl_copy_next('service','Replace service placeholders',0,'test');
 if ($preview['before'] !== $source || json_decode($preview['after']) != json_decode($expected)) throw new Exception('Custom text_ed preview regression');
+$rows=[];
+pl_copy_inspect_fields(json_decode($source,true),'','',$rows);
+if (pl_copy_inspect_id('Google Ads service (post ID 873) ka saved Elementor data inspect karo')!==873 || pl_copy_inspect_id('Inspect Elementor post 873')!==873 || count($rows)!==3 || $rows[0]!==['0.elements.1.settings.text_ed','Leak repair','<p>Lorem ipsum dolor sit amet.</p><p>Real copy</p><p>Lorem ipsum.</p>']) throw new Exception('Local Elementor inspection failed');

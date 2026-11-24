@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PatchLoom
  * Description: Migrate existing PHP templates to ACF and WooCommerce and preview, apply or undo supported AI revisions.
- * Version: 0.7.5
+ * Version: 0.7.6
  * Update URI: https://github.com/#patchloom-release-channel
  * Requires at least: 5.8
  * Author: Saleem Iqbal
@@ -169,7 +169,11 @@ function arv_screen() {
                 if (strlen($message)>8000) throw new Exception('Shorten the message to 8,000 bytes.');
                 $pending=get_transient(patchloom_file_slot());
                 $reply=null;
-                if ($pending && $pending['stage']==='clarify') {
+                $inspection_id=pl_copy_inspect_id($message);
+                if ($inspection_id) {
+                    pl_copy_show_inspection($inspection_id);
+                    $reply='Local inspection complete. The saved widget values are shown below for this request.';
+                } elseif ($pending && $pending['stage']==='clarify') {
                     $question=patchloom_file_action('file_answer',null,$message);
                     $reply=$question ?: 'Updated preview ready. Review the replacement below before allowing a write.';
                 } elseif (!$pending && pl_copy_matches($message)) {
@@ -183,7 +187,7 @@ function arv_screen() {
                 if ($reply===null && !$pending) $reply=pl_prompt_work($message);
                 if ($reply===null) $reply=patchloom_begin_file_task($message);
                 if ($reply!==null) {
-                    delete_transient($slot);
+                    if (!$inspection_id) delete_transient($slot);
                 } elseif ($pending && $pending['theme']===get_stylesheet()) {
                     $can_preview=$pending['stage']==='read' && (!empty($pending['links']) || !empty($pending['menu'])) && !empty($pending['file']);
                     $confirm=preg_match('/^(?:(?:haan|han|yes|ok|okay|please|bhai|jaani|mere liye|ye|yeh|kaam|ab|is ko|isko|aap|tum)\s+)*(?:kro|karo|kar do|kr do|proceed|go ahead|do it|show preview)(?:\s+(?:bhai|please|jaani))?[.! ]*$/iu',trim($message));
@@ -214,7 +218,7 @@ function arv_screen() {
                     $reply='Revision preview ready. Review the current and proposed values below, then choose Apply changes.';
                 }
                 $local_scan=$reply!==null;
-                if ($reply===null) $reply=arv_ask('You are PatchLoom, a WordPress dashboard assistant. Reply in the user language. Answer questions conversationally. Local chat commands can count literal .html links or list active theme files. Other site state is unknown unless supplied. For an edit, tell the user to send a self-contained request with Preview revision. Existing PHP templates support ACF and WooCommerce migration previews.',['conversation'=>array_slice(array_values(array_filter($thread,function($turn){return empty($turn['local_scan']);})),-8),'message'=>$message],false,2048);
+                if ($reply===null) $reply=arv_ask('You are PatchLoom, a WordPress dashboard assistant. Reply in the user language. Answer questions conversationally. To inspect saved Elementor text_ed values locally, suggest the command Inspect Elementor post ID followed by the numeric ID. Local chat commands can count literal .html links or list active theme files. Other site state is unknown unless supplied. For an edit, tell the user to send a self-contained request with Preview revision. Existing PHP templates support ACF and WooCommerce migration previews.',['conversation'=>array_slice(array_values(array_filter($thread,function($turn){return empty($turn['local_scan']);})),-8),'message'=>$message],false,2048);
                 $thread[]=['local_scan'=>$local_scan,'user'=>$message,'assistant'=>wp_check_invalid_utf8(substr($reply,0,12000),true)];
                 $thread=array_slice($thread,-8);
                 set_transient($thread_key,$thread,DAY_IN_SECONDS);

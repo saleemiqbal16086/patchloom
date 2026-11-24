@@ -140,3 +140,37 @@ function pl_copy_controls($slot) {
     }
     echo '<p>Generate copy with Arena using the post title, headings and your instructions. Review one post at a time.</p><button class="button" name="arv_action" value="copy_next">Prepare next preview</button></form>';
 }
+
+function pl_copy_inspect_id($message) {
+    if (!preg_match('/\b(?:inspect|show|dikhao|dekho|display)\b/i',$message) || !preg_match('/\b(?:text_ed|elementor)\b/i',$message)) return 0;
+    return preg_match('/\bpost\s*(?:id\s*)?[:#]?\s*([1-9][0-9]*)\b/i',$message,$match) ? (int)$match[1] : 0;
+}
+
+function pl_copy_inspect_fields($nodes,$prefix,$heading,&$rows) {
+    foreach ($nodes as $i=>$node) {
+        if (!is_array($node)) continue;
+        $path = $prefix.$i.'.';
+        $settings = $node['settings'] ?? [];
+        if (!is_array($settings)) $settings = [];
+        if (($node['widgetType'] ?? '')==='heading' && empty($settings['__dynamic__']['title']) && is_string($settings['title'] ?? null)) $heading = wp_strip_all_tags($settings['title']);
+        $context = $heading;
+        if (empty($settings['__dynamic__']['title_text']) && is_string($settings['title_text'] ?? null)) $context = wp_strip_all_tags($settings['title_text']) ?: $context;
+        if (is_string($settings['text_ed'] ?? null)) $rows[] = [$path.'settings.text_ed',$context,$settings['text_ed']];
+        if (!empty($node['elements']) && is_array($node['elements'])) pl_copy_inspect_fields($node['elements'],$path.'elements.',$context,$rows);
+    }
+}
+
+function pl_copy_show_inspection($id) {
+    $post = get_post($id);
+    if (!$post || !current_user_can('edit_post',$id) || $post->post_password || !in_array($post->post_status,['publish','draft'],true)) throw new Exception('This post is unavailable for inspection.');
+    $tree = json_decode(get_post_meta($id,'_elementor_data',true),true);
+    if (!is_array($tree)) throw new Exception('This post has no readable local Elementor document.');
+    $rows = [];
+    pl_copy_inspect_fields($tree,'','',$rows);
+    echo '<article class="pl-message"><b>'.esc_html(get_the_title($id).' (#'.$id.')').'</b><p>'.count($rows).' saved text_ed fields</p>';
+    foreach ($rows as list($path,$heading,$value)) {
+        echo '<p><code>'.esc_html($path).'</code><br>Heading: '.esc_html($heading ?: '(no preceding heading in this container)').'</p>';
+        echo '<pre style="white-space:pre-wrap;overflow-wrap:anywhere">'.htmlspecialchars($value,ENT_QUOTES | ENT_SUBSTITUTE,'UTF-8').'</pre>';
+    }
+    echo '</article>';
+}
