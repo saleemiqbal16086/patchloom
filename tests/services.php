@@ -18,21 +18,31 @@ $src=['listing.php'=>'<main>'.$card.str_replace('Heating','Cooling',$card).'</ma
 $answer=['cards'=>[],'card_bindings'=>[['field'=>'link','old'=>'detail.html'],['field'=>'title','old'=>'Heating']],'detail_bindings'=>[['field'=>'title','old'=>'Sample'],['field'=>'content','old'=>'Placeholder']]];
 foreach (['Heating','Cooling'] as $name) $answer['cards'][]=['html'=>str_replace('Heating',$name,$card),'title'=>$name,'excerpt'=>'Summary','content'=>'Draft content','image'=>''];
 $j=['listing'=>'listing.php','detail'=>'detail.php','type'=>'service','request'=>'Services migration'];
+pl_services_inventory($j);
 pl_services_prepare($j);
-if ($j['stage']!=='preview' || count($j['rows'])!==2 || $j['writes']['listing.php']['before']!==$src['listing.php'] || strpos($j['writes']['single-service.php']['after'],'get_post_field')===false || strpos($j['writes']['listing.php']['after'],$card)===false) throw new Exception('Incomplete preview');
+if ($j['stage']!=='copy' || count($j['rows'])!==2 || $j['writes']['listing.php']['before']!==$src['listing.php'] || strpos($j['writes']['single-service.php']['after'],'get_post_field')===false || strpos($j['writes']['listing.php']['after'],$card)===false) throw new Exception('Incomplete preview');
 // Exercise compact locators against actual formatted source with comments between cards.
 $baseline=$src['listing.php'];
 $src['listing.php']=str_replace('</article><article>',"</article>\n<!-- second card -->\n<article>",$baseline);
 foreach ($answer['cards'] as &$item) {unset($item['html']); $item['opening_tag']='<article>';}
 unset($item);
-$fixture=$j; pl_services_prepare($fixture);
+$fixture=$j; pl_services_inventory($fixture); pl_services_prepare($fixture);
 if (count($fixture['rows'])!==2 || strpos($fixture['writes']['listing.php']['after'],'<!-- second card -->')===false) throw new Exception('Comment-separated cards lost');
 $src['listing.php']=str_replace('<!-- second card -->','<aside>Keep this</aside>',$src['listing.php']);
-try {pl_services_prepare($fixture); throw new LogicException('Skipped an intervening section');} catch (LogicException $e){throw $e;} catch (Exception $e){if (strpos($e->getMessage(),'Cooling')===false) throw $e;}
+try {pl_services_inventory($fixture); pl_services_prepare($fixture); throw new LogicException('Skipped an intervening section');} catch (LogicException $e){throw $e;} catch (Exception $e){if (strpos($e->getMessage(),'Cooling')===false) throw $e;}
 $src['listing.php']=$baseline;
 $answer['cards'][0]['opening_tag']='<missing>';
 $answer['cards'][0]['html']='wrong fragment';
-try {pl_services_prepare($j); throw new LogicException('Invalid card accepted');} catch (LogicException $e){throw $e;} catch (RuntimeException $e){} catch (Exception $e){}
+try {$invalid=$j; pl_services_inventory($invalid); pl_services_prepare($invalid); throw new LogicException('Invalid card accepted');} catch (LogicException $e){throw $e;} catch (RuntimeException $e){} catch (Exception $e){}
+$answer=['content'=>'Prepared detail copy'];
+pl_services_copy_step($j);
+if ($j['stage']!=='copy' || count(pl_services_pending_copy($j))!==1) throw new Exception('Copy checkpoint missing');
+$answer=[];
+try {pl_services_copy_step($j);throw new LogicException('Accepted missing copy');} catch (LogicException $e){throw $e;} catch (Exception $e){}
+if (count(pl_services_pending_copy($j))!==1) throw new Exception('Failed copy lost progress');
+$answer=['content'=>'Second service detail'];
+pl_services_copy_step($j);
+if ($j['stage']!=='preview') throw new Exception('Final approval preview missing');
 echo "Service migration preview passed\n";
 function current_user_can(...$args){return true;}
 function get_post_type($id){return 'page';}

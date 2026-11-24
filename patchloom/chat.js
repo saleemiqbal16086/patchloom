@@ -45,6 +45,10 @@
             panel.replaceWith(next);
             if (settingsOpen) next.querySelector('.pl-settings').open=true;
             const alert=next.querySelector('[role=alert]');
+            const step=next.querySelector('button[value=services_next]');
+            if (!alert && step && ['services_prepare','services_next'].includes(button.value)) {
+                window.setTimeout(() => { if (step.isConnected) step.form.requestSubmit(step); }, 100);
+            }
             if (alert && input) next.querySelector('#patchloom-message').value=input.value;
             (alert || next.querySelector('.pl-feed > :last-child') || next).scrollIntoView({block:'nearest'});
         } catch {
