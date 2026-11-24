@@ -26,3 +26,5 @@ $_POST['file_token']=$job['token'];
 patchloom_file_action('file_answer',null,'Use all published books');
 if ($job['stage']!=='write'||$job['new']!=='New cards'||file_get_contents($dir.'/Home.php')!=='Old cards') throw new Exception('Reply did not produce a read-only preview');
 unlink($dir.'/Home.php');rmdir($dir);echo "Clarification to preview passed\n";
+passthru(escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/service-copy.php'),$copy_status);
+if ($copy_status !== 0) throw new Exception('Service copy regression failed');

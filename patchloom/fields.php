@@ -33,6 +33,7 @@ function arv_target_value($id,$entry) {
         case 'acf':
             if (!function_exists('get_field')) throw new Exception('Activate ACF.');
             return get_field($entry['key'],$id,false);
+        case 'elementor_source': return get_post_meta($id,'_elementor_data',true);
         case 'elementor':
             return json_decode(get_post_meta($id,'_elementor_data',true),true);
         case 'product':
@@ -42,11 +43,14 @@ function arv_target_value($id,$entry) {
         default: return get_post_field('post_content',$id,'raw');
     }
 }
-function arv_target_save($id,$entry,$value) {
+function arv_target_save($id,$entry,$value,$previous=null) {
     switch ($entry['kind']) {
         case 'acf': update_field($entry['key'],$value,$id); break;
+        case 'elementor_source':
         case 'elementor':
-            update_post_meta($id,'_elementor_data',wp_slash(wp_json_encode($value)));
+            if ($entry['kind']==='elementor_source') {
+                if (!update_post_meta($id,'_elementor_data',wp_slash($value),$previous)) throw new Exception('Elementor document changed or save failed. Prepare a fresh preview.');
+            } else update_post_meta($id,'_elementor_data',wp_slash(wp_json_encode($value)));
             delete_post_meta($id,'_elementor_element_cache');
             if (class_exists('Elementor\\Plugin')) \Elementor\Plugin::$instance->files_manager->clear_cache();
             break;

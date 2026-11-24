@@ -1,7 +1,7 @@
 === PatchLoom ===
 Tags: revisions, ai assistant, custom fields, theme development
 Requires PHP: 7.4
-Stable tag: 0.7.2
+Stable tag: 0.7.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,6 +12,8 @@ Preview AI-assisted content edits and migrate existing PHP templates into ACF an
 PatchLoom by Saleem Iqbal helps administrators review suggested edits before applying them. Supported targets include ordinary page text, supported ACF fields, selected Elementor text controls and regular prices for simple products or variations. After saving an edit, the plugin reads the value back. Undo is available for the most recent applied change for up to one day.
 
 In chat, request Home template ACF fields or a WooCommerce product CSV and template conversion. Select the Home page and source PHP files. Approve the inventory before importing products and inspect each proposed file before applying changes.
+
+For heading-based Elementor service copy, ask chat to replace Lorem Ipsum, select the published custom post type, and prepare the next preview. Each approval covers up to eight recognized placeholder paragraphs on one post. Continue until the scan completes.
 
 == Installation ==
 

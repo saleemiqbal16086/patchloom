@@ -1,0 +1,29 @@
+<?php
+define('ABSPATH',__DIR__);
+define('HOUR_IN_SECONDS',3600);
+require dirname(__DIR__).'/patchloom/service-copy.php';
+function wp_html_split($s){return preg_split('/(<[^>]+>)/',$s,-1,PREG_SPLIT_DELIM_CAPTURE);}
+function wp_strip_all_tags($s){return strip_tags($s);}
+function get_post_types(){return ['service'=>(object)[]];}
+function get_post_meta(){return 'builder';}
+function current_user_can(){return true;}
+function get_the_title(){return 'Roof repair';}
+function wp_generate_uuid4(){return 'test';}
+function esc_html($s){return htmlspecialchars($s,ENT_QUOTES);}
+function wp_json_encode($s){return json_encode($s);}
+function arv_ask($p,$data){
+    if ($data['headings']!==['Leak repair','Leak repair']) throw new Exception('Incorrect heading scope');
+    return ['paragraphs'=>['Inspect flashing & seals.','Identify the source.']];
+}
+function arv_target_value(){return $GLOBALS['source'];}
+function set_transient($key,$value,$ttl){$GLOBALS['preview']=$value;}
+$wpdb=new class {
+    public $posts='posts';
+    function prepare(...$args){return '';}
+    function get_col(){return [19];}
+};
+$source='[{"elements":[{"widgetType":"heading","settings":{"title":"Leak repair"}},{"widgetType":"text-editor","settings":{"editor":"<p>Lorem ipsum dolor sit amet.</p><p>Real copy</p><p>Lorem ipsum.</p>","style":{}}},{"widgetType":"text-editor","settings":{"editor":"Lorem ipsum. Keep this client sentence."}},{"widgetType":"text-editor","settings":{"editor":"Lorem ipsum.","__dynamic__":{"editor":"tag"}}}]}]';
+$result=pl_copy_next('service','Elementor services lorem ipsum replace',0,'test');
+$expected=str_replace('<p>Lorem ipsum dolor sit amet.</p><p>Real copy</p><p>Lorem ipsum.</p>','<p>Inspect flashing &amp; seals.</p><p>Real copy</p><p>Identify the source.</p>',$source);
+if ($result['cursor']!==18 || $preview['before']!==$source || json_decode($preview['after'])!=json_decode($expected) || count($preview['diff'])!==2 || strpos($preview['after'],'"style":{}')===false) throw new Exception('Invalid preview');
+echo "Service copy preview passed\n";

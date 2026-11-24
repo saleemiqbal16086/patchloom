@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PatchLoom
  * Description: Migrate existing PHP templates to ACF and WooCommerce and preview, apply or undo supported AI revisions.
- * Version: 0.7.2
+ * Version: 0.7.3
  * Update URI: https://github.com/#patchloom-release-channel
  * Requires at least: 5.8
  * Author: Saleem Iqbal
@@ -17,6 +17,7 @@ require_once __DIR__ . '/updates.php';
 require_once __DIR__ . '/dependency.php';
 require_once __DIR__ . '/workflow.php';
 require_once __DIR__ . '/fields.php';
+require_once __DIR__ . '/service-copy.php';
 require_once __DIR__ . '/inspection.php';
 require_once __DIR__ . '/theme-chat.php';
 
@@ -127,7 +128,29 @@ function arv_screen() {
                 arv_ask('Reply with OK.', ['test'=>'connection'], false, 128);
                 echo '<p>Arena connection verified. The configured router returned a valid reply.</p>';
             }
+            if ($act === 'copy_skip') {
+                $plan = get_transient($slot);
+                $state = get_transient(pl_copy_key());
+                if (!$state || empty($plan['copy_type']) || !hash_equals($plan['token'],sanitize_text_field($_POST['token'] ?? ''))) throw new Exception('Preview expired.');
+                $state['cursor'] = (int)$plan['id'];
+                set_transient(pl_copy_key(),$state,DAY_IN_SECONDS);
+                delete_transient($slot);
+            }
+            if ($act === 'copy_next') {
+                $state = get_transient(pl_copy_key());
+                if (!$state || get_transient($slot)) throw new Exception('Start a new service copy request or review the current preview.');
+                $type = $state['type'] ?? sanitize_key(wp_unslash($_POST['copy_type'] ?? ''));
+                $next = pl_copy_next($type,$state['request'],$state['cursor'],$slot);
+                if ($next) {
+                    set_transient(pl_copy_key(),array_merge($state,$next,['type'=>$type]),DAY_IN_SECONDS);
+                    echo !empty($next['preview']) ? '<p>Review the proposed paragraphs below.</p>' : '<p>Scan continues in the next batch.</p>';
+                } else {
+                    delete_transient(pl_copy_key());
+                    echo '<p>Scan complete. No more supported placeholder paragraphs found.</p>';
+                }
+            }
             if ($act === 'clear') {
+                delete_transient(pl_copy_key());
                 delete_transient($thread_key);
                 delete_transient(pl_work_key());
                 delete_transient($slot);
@@ -143,6 +166,9 @@ function arv_screen() {
                 if ($pending && $pending['stage']==='clarify') {
                     $question=patchloom_file_action('file_answer',null,$message);
                     $reply=$question ?: 'Updated preview ready. Review the replacement below before allowing a write.';
+                } elseif (!$pending && pl_copy_matches($message)) {
+                    set_transient(pl_copy_key(),['request'=>$message,'cursor'=>0],DAY_IN_SECONDS);
+                    $reply='Choose the service post type below to preview heading-based replacements.';
                 } elseif (patchloom_product_section($message)) {
                     $reply=patchloom_begin_file_task($message);
                     delete_transient(pl_work_key());
@@ -194,9 +220,10 @@ function arv_screen() {
                 $id = $plan['id'];
                 $p = get_post($id);
                 $entry=$plan['entry']??['kind'=>'content'];
+                if (isset($plan['copy_type']) && (!$p || $p->post_type!==$plan['copy_type'] || $p->post_status!=='publish' || get_post_meta($id,'_elementor_edit_mode',true)!=='builder')) throw new Exception('Service post changed. Prepare a fresh preview.');
                 if (!$p || !in_array($p->post_status,['publish','draft'],true) || $p->post_password || !current_user_can('edit_post',$id) || arv_target_value($id,$entry)!==$plan[$rev?'after':'before']) throw new Exception('Target changed. Generate a fresh preview.');
                 $content=$plan[$rev?'before':'after'];
-                arv_target_save($id,$entry,$content);
+                arv_target_save($id,$entry,$content,$plan[$rev?'after':'before']);
                 if (arv_target_value($id,$entry)!==$content) throw new Exception('Read-back differs from preview. Check the saved field.');
                 if (!$rev) set_transient($undo,$plan,DAY_IN_SECONDS);
                 delete_transient($rev?$undo:$slot);
@@ -212,6 +239,7 @@ function arv_screen() {
         echo '<article class="pl-message"><b>PatchLoom</b>'.esc_html($turn['assistant']).'</article>';
     }
     echo $notice;
+    pl_copy_controls($slot);
     pl_work_controls();
     patchloom_file_controls();
     foreach (['apply','undo'] as $act) {
@@ -224,6 +252,7 @@ function arv_screen() {
             echo '<h3>'.esc_html(get_the_title($plan['id'])).'</h3><input type="hidden" name="token" value="'.esc_attr($plan['token']).'">';
             if ($act==='apply') foreach ($plan['diff'] as $pair) echo '<p><del>'.esc_html($pair[0]).'</del><br><ins>'.esc_html($pair[1]).'</ins></p>';
         }
+        if ($act==='apply' && isset($plan['copy_type'])) echo '<button class="button" name="arv_action" value="copy_skip">Skip this post</button> ';
         $labels=['key'=>'Save key','test'=>'Test Arena connection','preview'=>'Preview revision','apply'=>'Apply changes','undo'=>'Undo last change'];
         echo '<button class="button" name="arv_action" value="'.esc_attr($act).'">'.esc_html($labels[$act]).'</button></form>';
     }
