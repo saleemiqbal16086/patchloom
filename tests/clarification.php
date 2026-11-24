@@ -49,3 +49,5 @@ foreach (['team','our-teem'] as $name) {
 $link_pages[]=(object)['post_password'=>'','post_title'=>'Team Members','post_name'=>'team-members','ID'=>11];
 $weak='<a href="members.html">View</a>';
 if (patchloom_page_links($weak,$report)!==$weak || strpos(end($report),'/team-members/')===false) throw new Exception('Weak link should show a candidate for review');
+passthru(escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/services.php'),$services_status);
+if ($services_status!==0) throw new Exception('Service migration regression failed');

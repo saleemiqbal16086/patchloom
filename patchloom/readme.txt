@@ -1,7 +1,7 @@
 === PatchLoom ===
 Tags: revisions, ai assistant, custom fields, theme development
 Requires PHP: 7.4
-Stable tag: 0.7.9
+Stable tag: 0.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -92,3 +92,6 @@ Generated field groups are imported into ACF and saved in the active theme acf-j
 
 = 0.3.1 =
 * Introduced the PatchLoom name and directory packaging.
+
+= Services migration (0.8.0) =
+Ask for "Services migration" in chat. Select the existing listing page, listing and detail PHP templates, and an existing public custom post type or Create service. Approve sending the two files to Arena. Review proposed drafts and both template changes before applying. A newly created service type is registered by PatchLoom while active, without an archive. Publish reviewed drafts individually. Additional mapped text sections use post meta, with an editable local field group when ACF is active.

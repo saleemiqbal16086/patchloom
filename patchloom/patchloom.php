@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PatchLoom
  * Description: Migrate existing PHP templates to ACF and WooCommerce and preview, apply or undo supported AI revisions.
- * Version: 0.7.9
+ * Version: 0.8.0
  * Update URI: https://github.com/#patchloom-release-channel
  * Requires at least: 5.8
  * Author: Saleem Iqbal
@@ -16,6 +16,7 @@ defined('ABSPATH') || exit;
 require_once __DIR__ . '/updates.php';
 require_once __DIR__ . '/dependency.php';
 require_once __DIR__ . '/workflow.php';
+require_once __DIR__ . '/services.php';
 require_once __DIR__ . '/fields.php';
 require_once __DIR__ . '/service-copy.php';
 require_once __DIR__ . '/inspection.php';
@@ -122,6 +123,7 @@ function arv_screen() {
             check_admin_referer('arv_admin');
             $act = sanitize_key($_POST['arv_action']);
             if (in_array($act,['file_read','file_write','file_cancel'],true)) patchloom_file_action($act);
+            if (strpos($act,'services_')===0) pl_services_action($act);
             if (strpos($act,'work_')===0) pl_work_action($act);
             if ($act === 'key') update_option('arv_key',sanitize_text_field(wp_unslash($_POST['key'])),false);
             if ($act === 'test') {
@@ -156,6 +158,7 @@ function arv_screen() {
                 }
             }
             if ($act === 'clear') {
+                delete_transient(pl_services_key());
                 delete_transient(pl_copy_key());
                 delete_transient($thread_key);
                 delete_transient(pl_work_key());
@@ -176,6 +179,9 @@ function arv_screen() {
                 } elseif ($pending && $pending['stage']==='clarify') {
                     $question=patchloom_file_action('file_answer',null,$message);
                     $reply=$question ?: 'Updated preview ready. Review the replacement below before allowing a write.';
+                } elseif (!$pending && pl_services_intent($message) && (!pl_copy_matches($message) || preg_match('/single-service|listing|detail template|services migration/i',$message))) {
+                    $reply=pl_services_start($message);
+                    delete_transient(pl_work_key());
                 } elseif (!$pending && pl_copy_matches($message)) {
                     set_transient(pl_copy_key(),['request'=>$message,'cursor'=>0],DAY_IN_SECONDS);
                     $reply='Choose the service post type below to preview heading-based replacements.';
@@ -250,6 +256,7 @@ function arv_screen() {
     }
     echo $notice;
     pl_copy_controls($slot);
+    pl_services_controls();
     pl_work_controls();
     patchloom_file_controls();
     foreach (['apply','undo'] as $act) {
