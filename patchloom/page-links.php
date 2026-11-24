@@ -1,6 +1,28 @@
 <?php
 defined('ABSPATH') || exit;
 
+// Prefer exact labels and filenames. Only fall back to common equivalent page names.
+function patchloom_link_matches($index,$label,$stem) {
+    if (!empty($index[$label])) return $index[$label];
+    if (!empty($index[$stem])) return $index[$stem];
+    $groups = [
+        ['about','about-us','about-me'],
+        ['contact','contact-us','contact-me'],
+        ['service','services','our-services'],
+    ];
+    foreach ($groups as $group) {
+        if (!in_array($stem,$group,true)) continue;
+        $matches = [];
+        foreach ($group as $alias) {
+            // A specific filename such as about-me must not imply about-us.
+            if ($stem!==$group[0] && $alias!==$group[0]) continue;
+            $matches += $index[$alias] ?? [];
+        }
+        return $matches;
+    }
+    return [];
+}
+
 function patchloom_page_links($source,&$report) {
     $index=$by_id=[];
     foreach (get_posts(['post_type'=>'page','post_status'=>'publish','posts_per_page'=>-1]) as $page) {
@@ -47,7 +69,7 @@ function patchloom_page_links($source,&$report) {
                 $dest='/';
             } else {
                 $matches=strpos($label,$prefix)===false?($index[$key]??[]):[];
-                if (!$matches) $matches=$legacy?[$legacy]:($index[$stem]??[]);
+                if (!$matches) $matches=$legacy?[$legacy]:patchloom_link_matches($index,$key,$stem);
                 if (count($matches)!==1) { $report[]=$label.' — no unique published page match';return $m[0]; }
                 $page=reset($matches);
                 $dest='/'.trim(get_page_uri($page),'/').'/';

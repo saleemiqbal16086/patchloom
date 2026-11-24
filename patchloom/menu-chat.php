@@ -38,12 +38,11 @@ function patchloom_menu_preview($source,&$task) {
         $id=0;
         if (preg_match('~^(?:index\.html|/|<\?php\s+echo\s+esc_url\(\s*home_url\(\s*["\x27]/["\x27]\s*\)\s*\)\s*;\s*\?>)$~i',$href)) $url=home_url('/');
         else {
-            $matches=$index[sanitize_title($label)]??[];
             if (preg_match('~^<\?php\s+echo\s+esc_url\(\s*get_permalink\(\s*(\d+)\s*\)\s*\)\s*;\s*\?>$~',$href,$m)) $id=(int)$m[1];
             elseif (preg_match('~^<\?php\s+echo\s+esc_url\(\s*home_url\(\s*["\x27](/[\w/-]+)["\x27]\s*\)\s*\)\s*;\s*\?>$~',$href,$m)) {
                 $page=get_page_by_path(trim($m[1],'/')); $id=$page?$page->ID:0;
             } elseif (preg_match('~^(?:\./|/)?([\w-]+)\.html$~i',$href,$m)) {
-                if (!$matches) $matches=$index[sanitize_title($m[1])]??[];
+                $matches=patchloom_link_matches($index,sanitize_title($label),sanitize_title($m[1]));
                 if (count($matches)===1) $id=reset($matches)->ID;
             }
             $page=$id?get_post($id):null;

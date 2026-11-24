@@ -28,3 +28,17 @@ if ($job['stage']!=='write'||$job['new']!=='New cards'||file_get_contents($dir.'
 unlink($dir.'/Home.php');rmdir($dir);echo "Clarification to preview passed\n";
 passthru(escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/service-copy.php'),$copy_status);
 if ($copy_status !== 0) throw new Exception('Service copy regression failed');
+
+function get_posts($args){return $GLOBALS['link_pages'];}
+function sanitize_title($s){return strtolower(str_replace(' ','-',trim($s)));}
+function wp_strip_all_tags($s){return strip_tags($s);}
+function get_page_uri($page){return $page->post_name;}
+function user_trailingslashit($path){return $path;}
+function get_option($key){return '/%postname%/';}
+$link_pages=[(object)['post_password'=>'','post_title'=>'About Us','post_name'=>'about-us','ID'=>7]];
+$report=[];
+$link='<a href="about.html#team">About</a>';
+if (strpos(patchloom_page_links($link,$report),"home_url( '/about-us/' ) . '#team'")===false) throw new Exception('About alias did not resolve');
+$link_pages[]=(object)['post_password'=>'','post_title'=>'About Me','post_name'=>'about-me','ID'=>8];
+if (patchloom_page_links($link,$report)!==$link) throw new Exception('Ambiguous alias was rewritten');
+if (strpos(patchloom_page_links('<a href="about.html">About Me</a>',$report),'/about-me/')===false) throw new Exception('Exact anchor match lost precedence');
