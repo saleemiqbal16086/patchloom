@@ -54,3 +54,4 @@ $source = json_encode([['elements'=>[['elements'=>$nodes]]]]);
 pl_copy_next('service','Preview service placeholders',0,'test');
 $saved = json_decode($preview['after'],true)[0]['elements'][0]['elements'];
 if ($preview['before']!==$source || count($preview['diff'])!==2 || $saved[1]['settings']['text_ed']!=='<p>Inspect flashing &amp; seals.</p>' || $saved[2]['settings']['text_ed']!=='<p>Identify the source.</p>' || $saved[3]!==$nodes[3]) throw new Exception('Reported service paragraph regression');
+if (pl_native_service_field("Service excerpt\nLorem ipsum.")!=='excerpt' || pl_native_service_field("Service post_content\nLorem ipsum.")!=='content' || pl_native_service_field('Elementor services lorem ipsum replace')!=='') throw new Exception('Native service routing regression');

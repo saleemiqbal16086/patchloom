@@ -40,6 +40,7 @@ function arv_target_value($id,$entry) {
             $product=wc_get_product($id);
             if (!$product) throw new Exception('Product unavailable.');
             return $product->get_regular_price('edit');
+        case 'excerpt': return get_post_field('post_excerpt',$id,'raw');
         default: return get_post_field('post_content',$id,'raw');
     }
 }
@@ -60,7 +61,7 @@ function arv_target_save($id,$entry,$value,$previous=null) {
             $product->save();
             break;
         default:
-            $result=wp_update_post(wp_slash(['ID'=>$id,'post_content'=>$value]),true);
+            $result=wp_update_post(wp_slash(['ID'=>$id,($entry['kind']==='excerpt'?'post_excerpt':'post_content')=>$value]),true);
             if (is_wp_error($result)) throw new Exception($result->get_error_message());
     }
 }

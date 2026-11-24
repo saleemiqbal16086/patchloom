@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PatchLoom
  * Description: Migrate existing PHP templates to ACF and WooCommerce and preview, apply or undo supported AI revisions.
- * Version: 0.8.4
+ * Version: 0.8.5
  * Update URI: https://github.com/#patchloom-release-channel
  * Requires at least: 5.8
  * Author: Saleem Iqbal
@@ -157,7 +157,13 @@ function arv_screen() {
                     else echo '<p>No editable placeholder matched. Check the widget name and exact text in one affected service.</p>';
                 }
             }
+            if ($act==='native_preview') {
+                $plan=pl_native_service_plan();
+                set_transient($slot,$plan,HOUR_IN_SECONDS);
+                delete_transient(pl_native_service_key());
+            }
             if ($act === 'clear') {
+                delete_transient(pl_native_service_key());
                 delete_transient(pl_services_key());
                 delete_transient(pl_copy_key());
                 delete_transient($thread_key);
@@ -176,6 +182,13 @@ function arv_screen() {
                 if ($inspection_id) {
                     pl_copy_show_inspection($inspection_id);
                     $reply='Local inspection complete. The saved widget values are shown below for this request.';
+                } elseif ($field=pl_native_service_field($message)) {
+                    $raw=wp_unslash($_POST['request']??'');
+                    $parts=preg_split('/\r\n|\r|\n/',$raw,2);
+                    $text=preg_match('/^service (excerpt|post_content)$/i',trim($parts[0])) ? ($parts[1]??'') : '';
+                    set_transient(pl_native_service_key(),['kind'=>$field,'text'=>$text,'token'=>wp_generate_uuid4()],HOUR_IN_SECONDS);
+                    delete_transient(pl_copy_key());
+                    $reply='Select the service and review the exact replacement text below.';
                 } elseif ($pending && $pending['stage']==='clarify') {
                     $question=patchloom_file_action('file_answer',null,$message);
                     $reply=$question ?: 'Updated preview ready. Review the replacement below before allowing a write.';
@@ -235,6 +248,7 @@ function arv_screen() {
                 if (!$plan || !hash_equals($plan['token'],sanitize_text_field($_POST['token'] ?? ''))) throw new Exception('Preview expired or replaced.');
                 $id = $plan['id'];
                 $p = get_post($id);
+                if (!empty($plan['native_service']) && (!$p || $p->post_type!=='service')) throw new Exception('Service changed. Prepare a fresh preview.');
                 $entry=$plan['entry']??['kind'=>'content'];
                 if (isset($plan['copy_type']) && (!$p || $p->post_type!==$plan['copy_type'] || $p->post_status!=='publish')) throw new Exception('Service post changed. Prepare a fresh preview.');
                 if (!$p || !in_array($p->post_status,['publish','draft'],true) || $p->post_password || !current_user_can('edit_post',$id) || arv_target_value($id,$entry)!==$plan[$rev?'after':'before']) throw new Exception('Target changed. Generate a fresh preview.');
@@ -255,6 +269,7 @@ function arv_screen() {
         echo '<article class="pl-message"><b>PatchLoom</b>'.esc_html($turn['assistant']).'</article>';
     }
     echo $notice;
+    pl_native_service_controls();
     pl_copy_controls($slot);
     pl_services_controls();
     pl_work_controls();

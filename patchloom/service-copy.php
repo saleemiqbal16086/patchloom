@@ -174,3 +174,38 @@ function pl_copy_show_inspection($id) {
     }
     echo '</article>';
 }
+
+function pl_native_service_field($request) {
+    $header=strtok($request,"\r\n");
+    if (!preg_match('/\bservices?\b/i',$header)) return '';
+    if (preg_match('/\b(?:post_excerpt|excerpt|short description)\b/i',$header)) return 'excerpt';
+    if (preg_match('/\b(?:post_content|detail body)\b/i',$header)) return 'content';
+    return '';
+}
+
+function pl_native_service_key() { return 'pl_native_service_'.get_current_user_id(); }
+
+function pl_native_service_controls() {
+    $state=get_transient(pl_native_service_key());
+    if (!$state) return;
+    $posts=get_posts(['post_type'=>'service','post_status'=>['publish','draft'],'posts_per_page'=>-1,'orderby'=>'title','order'=>'ASC']);
+    echo '<form method="post"><h3>Service '.esc_html($state['kind']).'</h3>';
+    wp_nonce_field('arv_admin');
+    echo '<input type="hidden" name="native_token" value="'.esc_attr($state['token']).'"><label>Service <select name="native_id" required><option value="">Select service</option>';
+    foreach ($posts as $p) if (!$p->post_password && current_user_can('edit_post',$p->ID)) echo '<option value="'.(int)$p->ID.'">'.esc_html($p->post_title.' (#'.$p->ID.')').'</option>';
+    echo '</select></label><p><label>Exact replacement text<textarea rows="6" class="large-text" name="native_text" required>'.esc_textarea($state['text']).'</textarea></label></p><button class="button" name="arv_action" value="native_preview">Preview text</button></form>';
+}
+
+function pl_native_service_plan() {
+    $state=get_transient(pl_native_service_key());
+    if (!$state || !hash_equals($state['token'],sanitize_text_field($_POST['native_token']??''))) throw new Exception('Service selection expired.');
+    $id=absint($_POST['native_id']??0);
+    $post=get_post($id);
+    if (!$post || $post->post_type!=='service' || !$id || $post->post_password || !in_array($post->post_status,['draft','publish'],true) || !current_user_can('edit_post',$id)) throw new Exception('Choose an editable service.');
+    $text=wp_unslash($_POST['native_text']??'');
+    if (!is_string($text) || trim($text)==='' || strlen($text)>60000 || strpos($text,'<')!==false || wp_check_invalid_utf8($text)!==$text) throw new Exception('Enter valid plain text (up to 60 KB).');
+    $text=str_replace(["\r\n","\r"],"\n",$text);
+    $entry=['kind'=>$state['kind']];
+    $before=arv_target_value($id,$entry);
+    return ['id'=>$id,'entry'=>$entry,'native_service'=>true,'diff'=>[[$before,$text]],'before'=>$before,'after'=>$text,'token'=>wp_generate_uuid4()];
+}
