@@ -366,12 +366,20 @@ function pl_bakery_draft($url,$job,&$sample_data=null) {
     return $id;
 }
 
+// WPBakery can load its shortcode mappings only when a builder page is rendered.
+function pl_bakery_available() {
+    if (defined('WPB_VC_VERSION') || function_exists('vc_manager') || class_exists('Vc_Manager',false)) return true;
+    if (shortcode_exists('vc_row') && shortcode_exists('vc_column_text')) return true;
+    if (!function_exists('is_plugin_active')) require_once ABSPATH.'wp-admin/includes/plugin.php';
+    return is_plugin_active('js_composer/js_composer.php');
+}
+
 function pl_bakery_action($act) {
     $key=pl_bakery_key(); $j=get_transient($key);
     if (!$j || !hash_equals($j['token'],sanitize_text_field($_POST['bakery_token']??''))) throw new Exception('Page import expired. Refresh the dashboard.');
     if ($act==='bakery_cancel') {delete_transient($key);return;}
     if (!current_user_can('manage_options') || !current_user_can('edit_pages') || !current_user_can('upload_files')) throw new Exception('Page and media permissions required.');
-    if (!shortcode_exists('vc_row') || !shortcode_exists('vc_column_text')) throw new Exception('Activate WPBakery Page Builder on this site.');
+    if (in_array($act,['bakery_sample','bakery_revise','bakery_next'],true) && !pl_bakery_available()) throw new Exception('WPBakery Page Builder was not detected on this WordPress site. Check the installed plugin name and site or network activation before creating drafts.');
     if (!class_exists('DOMDocument')) throw new Exception('Enable the PHP DOM extension to read source pages.');
     $lock='pl_bakery_import_lock';
     if (!add_option($lock,time(),'','no')) throw new Exception('Another page import is running.');

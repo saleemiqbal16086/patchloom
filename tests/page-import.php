@@ -24,3 +24,13 @@ $card='<article><h3>Flat Roofs</h3><p>Service text</p><a href="/roof/">Details</
 [, $blocks]=pl_bakery_extract('<main><h1>Services</h1><div>'.$card.$card.$card.'</div></main>','https://old.test/');
 $out=pl_bakery_render(pl_bakery_sections($blocks,'Services'),['text']);
 if (substr_count($out,'[vc_column_inner width="1/3"')!==3 || substr_count($out,'Service text')!==3) throw new Exception('Service card layout failed');
+function shortcode_exists($tag){return in_array($tag,$GLOBALS['shortcodes'],true);}
+function is_plugin_active($plugin){return $plugin==='js_composer/js_composer.php' && !empty($GLOBALS['builder_active']);}
+$shortcodes=[];
+if (pl_bakery_available()) throw new Exception('Inactive builder accepted');
+$builder_active=true;
+if (!pl_bakery_available()) throw new Exception('Active builder with unloaded admin shortcodes rejected');
+$builder_active=false; $shortcodes=['vc_row','vc_column_text'];
+if (!pl_bakery_available()) throw new Exception('Loaded shortcode support lost');
+$shortcodes=[]; define('WPB_VC_VERSION','test');
+if (!pl_bakery_available()) throw new Exception('Bundled builder rejected');
