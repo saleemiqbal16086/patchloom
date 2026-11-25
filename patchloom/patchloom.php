@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PatchLoom
  * Description: Migrate existing PHP templates to ACF and WooCommerce and preview, apply or undo supported AI revisions.
- * Version: 0.8.5
+ * Version: 0.9.0
  * Update URI: https://github.com/#patchloom-release-channel
  * Requires at least: 5.8
  * Author: Saleem Iqbal
@@ -17,6 +17,7 @@ require_once __DIR__ . '/updates.php';
 require_once __DIR__ . '/dependency.php';
 require_once __DIR__ . '/workflow.php';
 require_once __DIR__ . '/services.php';
+require_once __DIR__ . '/page-import.php';
 require_once __DIR__ . '/fields.php';
 require_once __DIR__ . '/service-copy.php';
 require_once __DIR__ . '/inspection.php';
@@ -95,7 +96,7 @@ function arv_plan($request) {
 add_action('admin_enqueue_scripts',function($hook){
     if ($hook!=='toplevel_page_patchloom') return;
     wp_enqueue_style('patchloom-chat',plugins_url('chat.css',__FILE__),[],'0.7.0');
-    wp_enqueue_script('patchloom-chat',plugins_url('chat.js',__FILE__),[],'0.8.2',true);
+    wp_enqueue_script('patchloom-chat',plugins_url('chat.js',__FILE__),[],'0.9.0',true);
 });
 add_action('wp_ajax_patchloom_chat_ui',function(){
     if (!current_user_can('manage_options')) wp_send_json_error([],403);
@@ -123,6 +124,7 @@ function arv_screen() {
             check_admin_referer('arv_admin');
             $act = sanitize_key($_POST['arv_action']);
             if (in_array($act,['file_read','file_write','file_cancel'],true)) patchloom_file_action($act);
+            if (strpos($act,'bakery_')===0) pl_bakery_action($act);
             if (strpos($act,'services_')===0) pl_services_action($act);
             if (strpos($act,'work_')===0) pl_work_action($act);
             if ($act === 'key') update_option('arv_key',sanitize_text_field(wp_unslash($_POST['key'])),false);
@@ -163,6 +165,7 @@ function arv_screen() {
                 delete_transient(pl_native_service_key());
             }
             if ($act === 'clear') {
+                delete_transient(pl_bakery_key());
                 delete_transient(pl_native_service_key());
                 delete_transient(pl_services_key());
                 delete_transient(pl_copy_key());
@@ -182,6 +185,8 @@ function arv_screen() {
                 if ($inspection_id) {
                     pl_copy_show_inspection($inspection_id);
                     $reply='Local inspection complete. The saved widget values are shown below for this request.';
+                } elseif (pl_bakery_intent($message)) {
+                    $reply=pl_bakery_start($message);
                 } elseif ($field=pl_native_service_field($message)) {
                     $raw=wp_unslash($_POST['request']??'');
                     $parts=preg_split('/\r\n|\r|\n/',$raw,2);
@@ -271,6 +276,7 @@ function arv_screen() {
     echo $notice;
     pl_native_service_controls();
     pl_copy_controls($slot);
+    pl_bakery_controls();
     pl_services_controls();
     pl_work_controls();
     patchloom_file_controls();

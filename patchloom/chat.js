@@ -45,6 +45,10 @@
             panel.replaceWith(next);
             if (settingsOpen) next.querySelector('.pl-settings').open=true;
             const alert=next.querySelector('[role=alert]');
+            if (!alert && ['bakery_scan','bakery_discover','bakery_approve','bakery_next','bakery_skip'].includes(button.value)) {
+                const action=next.querySelector('button[value=bakery_discover],button[value=bakery_next]');
+                if (action) setTimeout(()=>{if(action.isConnected) action.form.requestSubmit(action);},300);
+            }
             const step=next.querySelector('button[value=services_next]');
             if (!alert && step && ['services_prepare','services_next'].includes(button.value)) {
                 window.setTimeout(() => { if (step.isConnected) step.form.requestSubmit(step); }, 100);

@@ -1,7 +1,7 @@
 === PatchLoom ===
 Tags: revisions, ai assistant, custom fields, theme development
 Requires PHP: 7.4
-Stable tag: 0.8.5
+Stable tag: 0.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,3 +95,6 @@ Generated field groups are imported into ACF and saved in the active theme acf-j
 
 = Services migration (0.8.0) =
 Ask for "Services migration" in chat. Select the existing listing page, listing and detail PHP templates, and an existing public custom post type or Create service. Approve sending the two files to Arena. Review proposed drafts and both template changes before applying. A newly created service type is registered by PatchLoom while active, without an archive. Publish reviewed drafts individually. Additional mapped text sections use post meta, with an editable local field group when ACF is active.
+
+= 0.9.0 =
+Ask for "WPBakery page import". Enter the public source site or subdirectory, select pages discovered from sitemaps and same-site links and choose a first draft. Review the destination theme layout before approving remaining drafts. Source text is extracted locally. Arena can choose section arrangements and respond to layout feedback. Supports readable public HTML, standard image elements and native details/summary FAQs. Images are downloaded locally. JavaScript-rendered content, interactive forms, video embeds and background images need manual review. Discovery supports up to 200 pages in a run. WPBakery and PHP DOM are required.

@@ -51,3 +51,5 @@ $weak='<a href="members.html">View</a>';
 if (patchloom_page_links($weak,$report)!==$weak || strpos(end($report),'/team-members/')===false) throw new Exception('Weak link should show a candidate for review');
 passthru(escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/services.php'),$services_status);
 if ($services_status!==0) throw new Exception('Service migration regression failed');
+passthru(escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/page-import.php'),$builder_status);
+if ($builder_status!==0) throw new Exception('WPBakery import regression failed');
